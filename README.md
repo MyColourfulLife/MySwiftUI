@@ -1,4 +1,4 @@
-<img src="images/image-20200919104350543.png" alt="image-20200919104350543" style="zoom:50%;" />
+<img src="./images/image-20200919104350543.png" alt="image-20200919104350543" style="zoom:50%;" />
 
 使用Apple最新的Swift UI技术编写更好的app。
 
@@ -18,7 +18,7 @@ macOS版本：11.0 macOS Big Sur
 
 目前做的结果如图：
 
-<img src="images/Simulator Screen Shot - iPhone 11 - 2020-09-19 at 10.26.03.png" alt="卡片正面" style="zoom: 33%;" /><img src="images/Simulator Screen Shot - iPhone 11 - 2020-09-19 at 10.26.52.png" alt="卡片背面" style="zoom:33%;" />
+<img src="./images/Simulator Screen Shot - iPhone 11 - 2020-09-19 at 10.26.03.png" alt="卡片正面" style="zoom: 33%;" /><img src="./images/Simulator Screen Shot - iPhone 11 - 2020-09-19 at 10.26.52.png" alt="卡片背面" style="zoom:33%;" />
 
 
 
