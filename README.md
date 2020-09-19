@@ -1,4 +1,4 @@
-<img src="./images/image-20200919104350543.png" alt="image-20200919104350543" style="zoom:50%;" />
+<img src="./images/image-20200919104350543.png" alt="swiftUI官方图" style="zoom:50%;" />
 
 使用Apple最新的Swift UI技术编写更好的app。
 
@@ -11,6 +11,10 @@
 Xcode版本：12.0
 
 macOS版本：11.0 macOS Big Sur
+
+Github仓库地址:https://github.com/MyColourfulLife/MySwiftUI
+
+github仓库中的图片，您可能需要科学上网才能看得到。
 
 第一天：
 
