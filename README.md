@@ -357,6 +357,8 @@ struct EmojiMemoryGameView: View {
 
 
 
-今天的效果如下：
+今天的效果如下,可以翻牌啦：
+
+![预览图](./images/day3.png)
 
 <video src="./images/reative.mov"></video>
