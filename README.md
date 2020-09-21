@@ -245,5 +245,118 @@ struct GridView: View {
 
 在卡片视图GridView中，我们直接是使用卡片数据绘制视图。
 
+
+
 在视图ContentView中，我们需要ViewModel来连接view和model。使用ForEach函数，内容需要遵守Identifiable协议，因此我们在Card定义中，遵循了Identifiable协议。程序可以更好的区分卡片，为后续卡片的移动和动画打下了基础。
 
+---
+
+第三天：实现响应式程序
+
+用户交互的意图可以反馈到模型，模型的数据变化又能实时更新到视图上，是我们今天要实现的内容。
+
+> 修改名称
+
+项目启动时，Xcode给我们生成的代码模版中，视图名称用的是ContentView，现在我们知道我们要做什么了，是时候修改个有意义的名字了。也许对于程序功能来说名字可能没那么重要。但是对任何一项东西自身而言，名字再怎么重要也不为过。想想你自己的名字重要吗？当然很重要。如何修改视图名称呢？
+
+我们知道项目中引用此名称的有很多地方。我们当然可以使用全局查找替换功能。不过这里要用一种更好的方式。
+
+在我们要修改的名称处，按住command 点击，在弹出的菜单中选择 rename ，然后根据提示操作即可。此操作可以连文件名一起修改。非常好用。
+
+![rename1](./images/rename1.png)
+
+![rename2](./images/rename2.png)
+
+> 处理Model
+
+我们说，视图会实时显示model的内容。因此我们点击卡片时，需要修改数据模型。
+
+在这里我们修改卡片的反正即可。
+
+在`func choose(card:Card)`方法中，我们处理模型，
+
+我们不能直接写`card.isFaceUp = !card.isFaceUp `因为card是一个架构体，是值类型的数据，传递过来是一份copy，而不是我们要修改的模型本身。
+
+所以我们不能这么操作，而应该在我们的数组中找到使用的模型进行修改。我们可以通过找到索引，然后找到卡片数组中那个卡片模型，那下面这样可以吗？
+
+```swift
+var card = cards[index]
+card.isFaceUp = !card.isFaceUp
+```
+
+答案也是否定的，需要注意的是 在进行 card = 这个赋值操作时，也是copy的一份副本。因此这么做也没有修改原来的数据。那么改如何做呢？
+
+不要声明新的变量，找到之后直接修改。像下面这样。
+
+```swift
+self.cards[index].isFaceUp = !self.cards[index].isFaceUp
+```
+
+这样就是修改了原来数据模型。然而这句话还是报错了因为不像class。struct这里面的self是不可变的，我们直接修改里面的属性就会报错。如果我们要修改，我们就要明确指出我这个方法会修改结构体中的属性，这需要在函数前面加上 **mutating** 。
+
+```swift
+   mutating func choose(card:Card) {
+        print("card choosen:\(card)")
+        if let index = self.index(of: card) {
+            cards[index].isFaceUp = !cards[index].isFaceUp
+        }
+    }
+    
+    func index(of card:Card) -> Int? {
+        for index in 0..<cards.count {
+            if card.id == cards[index].id {
+                return index
+            }
+        }
+        return nil
+    }
+```
+
+model处理好了，但是运行起来，点击卡片，卡片还是不会反转。要实现响应式，我们还需要处理 ViewModel
+
+> 处理ViewModel
+
+ViewModel 负责把变化发送出去，ViewModel需要实现协议，让自己成为一个可以被观察可以发送变化的类。因此要实现`ObservableObject`协议，我们可以从协议本身获取一个属性 objectWillChange，这个东西是一个发布者publisher，可以把变化发送出去。我们在修改model之前，调用objectWillChange的send方法，即可把变化发送出去，感兴趣的视图就会适时处理。
+
+```swift
+ func shoose(card:MemoryGame<String>.Card) {
+        objectWillChange.send()
+        model.choose(card: card)
+    }
+```
+
+然而我们也并不这样做，因为如果变化很多，我们每次都要手动调用 send方法可能会有遗忘。为了解决这个问题，我们可以在模型前面加上 **@Published**
+
+```swift
+class EmojiMemoryGame:ObservableObject {
+   @Published private var model:MemoryGame<String> = EmojiMemoryGame.createMemoryGame()
+```
+
+这不是swift的关键字，这是一个属性包装器，包装这个属性之后，我们就不需要在修改model之前，手动调用send方法了。@Published属性包装器的作用就是在属性将要变化时自动调用send方法。
+
+viewModel不支持任何View，因为可能很多视图都要使用这个viewModel，因此模型变化发布出去了，还需要关心的View还要做些处理才可以。
+
+> 处理View
+
+在View的代码中，我们监听viewModel，在收到model变化之后更新视图。我们可以在viewmodel属性前加上@ObservedObject属性包装器，让viewModel成为被观察到对象
+
+```swift
+struct EmojiMemoryGameView: View {
+   @ObservedObject var viewModel:EmojiMemoryGame
+    var body: some View {
+        HStack {
+            ForEach(viewModel.cards){ card in
+                GridView(card: card).onTapGesture {
+                    viewModel.shoose(card: card)
+                }
+            }
+        }
+```
+
+这样就实现了响应时程序，在model数据发生变化时就会实时更新视图。swiftUI很聪明，全部更新UI会有很大消耗，swiftUI会尽可能避免更新全部UI而是只更新变化的部分。这也是ForEach函数要求参数实现Identifiable的原因之一。
+
+
+
+今天的效果如下：
+
+<video src="./images/reative.mov"></video>
