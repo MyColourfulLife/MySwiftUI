@@ -14,7 +14,7 @@ macOS版本：11.0 macOS Big Sur
 
 Github仓库地址:https://github.com/MyColourfulLife/MySwiftUI
 
-github仓库中的图片，您可能需要科学上网才能看得到。
+> **注意⚠️：github仓库中的图片，您可能需要科学上网才能看得到。**
 
 第一天：
 
