@@ -362,3 +362,166 @@ struct EmojiMemoryGameView: View {
 ![预览图](./images/day3.png)
 
 <video src="./images/reative.mov"></video>
+
+---
+
+第四天：实现grid布局，实现翻牌规则
+
+之前我们卡片都在一行，在某个方向上浪费了很多空间。我们希望卡片分布在多行也就是网格状布局。在目前的siwft中，并没有这样的布局，需要我们自己实现。
+
+我们创建一个 Grid 结构体，来实现网格布局。
+
+```swift
+struct Grid<Item,ItemView>: View where Item:Identifiable, ItemView:View {
+    var items:[Item]
+    var viewForItem: (Item) -> ItemView
+    
+    init(items:[Item], viewForItem:@escaping (Item)->ItemView) {
+        self.items = items
+        self.viewForItem = viewForItem
+    }
+    
+    var body: some View {
+        GeometryReader { gemory in
+            body(for: GridLayout(itemCount: items.count, in: gemory.size))
+        }
+    }
+    
+    func body(for layout:GridLayout) -> some View {
+        ForEach(items) { item in
+            let index = items.firstIndex(matching:item)!
+            viewForItem(item)
+                .frame(width:layout.itemSize.width,height:layout.itemSize.height)
+                .position(layout.location(ofItemAt: index))
+        }
+    }
+    
+}
+```
+
+我们需要知道 items 以及根据item生成对应的视图。并计算他们的大小摆放他们的位置。这是我们这个结构体要实现的。
+
+`viewForItem`是一个函数类型的，在初始化方法中需要添加关键字 **@escaping** 来表明这是一个逃逸闭包。这个关键字让程序知道 这个初始化很快会执行完，但函数会延迟调用，不会随着init函数一起调用，而是在将来某些时候触发调用。这里要使用@escaping告诉计算机。
+
+我们可以通过GeometryReader来获取分配的空间大小，然后使用GridLayout来计算每个卡片的大小和位置。
+
+使用ForEach 函数时，需要参数是有唯一标示的，而我们的Item我们并不关心是什么内容，但是函数要求Item需要是遵循了Identifiable协议的，因此我们要限制一下我们的结构体，要求Grid结构体中用到的Item是遵循了Identifiable协议的。在这里我们又一次使用了泛型的概念。同样的，viewForItem函数要求接受一个item，返回一个view，ItemView要求遵循了View协议。
+
+```swift
+struct Grid<Item,ItemView>: View where Item:Identifiable, ItemView:View {}
+```
+
+在我们的视图中，将原来的HStack换成我们自己写的网格布局，并设置卡片之间的间距。
+
+```swift
+struct EmojiMemoryGameView: View {
+   @ObservedObject var viewModel:EmojiMemoryGame
+    var body: some View {
+        Grid(items: viewModel.cards) { card in
+            GridView(card: card).onTapGesture {
+                viewModel.shoose(card: card)
+            }.padding(cardPadding)
+        }
+        .padding()
+        .foregroundColor(.orange)
+    }
+    let cardPadding:CGFloat = 5
+}
+```
+
+<img src="./images/grid.png" alt="网格布局" style="zoom:50%;" />
+
+接下来我们要完善一下游戏规则。
+
+启动时所有卡片都是反面
+
+点开第一个卡片时，翻开卡片
+
+点开第二哥卡片时，和第一个卡片进行对比
+
+点开第三张卡片时，合上其他卡片
+
+我们处理一下我们选择卡片的逻辑代码：
+
+我们需要定义一个变量来跟踪正面朝上的那个卡片的位置索引`var indexOfTheOneAndOnlyFaceupCard:Int?`刚开始没有正面朝上，所以这是个可选值。
+
+我们要判断选择的卡片是否是正面朝上以及是否已经匹配。
+
+```swift
+   mutating func choose(card:Card) {
+        print("card choosen:\(card)")
+    if let choosenIndex = cards.firstIndex(matching: card), !cards[choosenIndex].isFaceUp, !cards[choosenIndex].isMactched {
+        if let potentialMactchIndex = indexOfTheOneAndOnlyFaceupCard {
+            if cards[choosenIndex].content == cards[potentialMactchIndex].content {
+                // matched
+                cards[choosenIndex].isMactched = true
+                cards[potentialMactchIndex].isMactched = true
+            }
+			   indexOfTheOneAndOnlyFaceupCard = nil
+        }else {
+	          for index in cards.indices {
+              cards[index].isFaceUp = false
+        }
+            indexOfTheOneAndOnlyFaceupCard = choosenIndex
+        }
+           cards[choosenIndex].isFaceUp = true
+        }
+    }
+
+```
+
+然后我们运行后发现，被匹配之后的卡片虽然正面朝下，但是已经不能点击了。这样的界面行为很不好。我们希望已经匹配成功的卡片不再显示。我们在视图代码中，修改显示卡片背面的逻辑，只有没有匹配的卡片才进行绘制。
+
+```swift
+ZStack {
+                if card.isFaceUp {
+                RoundedRectangle(cornerRadius: conerRadius).fill(Color.white)
+                RoundedRectangle(cornerRadius: conerRadius).stroke(lineWidth: edgeLineWidth)
+                    Text(card.content)
+                }else {
+                    if !card.isMactched {RoundedRectangle(cornerRadius: conerRadius).fill(Color.orange)}
+                }
+            }
+```
+
+上面处理了界面。下面我们来优化下选择卡片之后的代码。
+
+我们把indexOfTheOneAndOnlyFaceupCard赋值之后逻辑代码写在一起，将indexOfTheOneAndOnlyFaceupCard作为计算属性，在set方法和get方法中处理逻辑
+
+```swift
+    var indexOfTheOneAndOnlyFaceupCard:Int? {
+        get {
+             cards.indices.filter{cards[$0].isFaceUp}.only
+        }
+        set {
+            for index in cards.indices {
+                cards[index].isFaceUp = index == newValue
+            }
+        }
+    }
+
+```
+
+这样的话 choose中的代码就可以更简单了
+
+```swift
+   mutating func choose(card:Card) {
+    if let choosenIndex = cards.firstIndex(matching: card), !cards[choosenIndex].isFaceUp, !cards[choosenIndex].isMactched {
+        if let potentialMactchIndex = indexOfTheOneAndOnlyFaceupCard {
+            if cards[choosenIndex].content == cards[potentialMactchIndex].content {
+                // matched
+                cards[choosenIndex].isMactched = true
+                cards[potentialMactchIndex].isMactched = true
+            }
+            cards[choosenIndex].isFaceUp = true
+        }else {
+            indexOfTheOneAndOnlyFaceupCard = choosenIndex
+        }
+        }
+    }
+```
+
+代码中还做了其他的优化，今天的效果图如下：
+
+![今日效果图](./images/dayfour.gif)
+

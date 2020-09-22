@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct MemoryGame<CardContent> {
+struct MemoryGame<CardContent> where CardContent:Equatable {
     var cards:Array<Card>
     
     init(numberOfCards:Int,cardContentFactory:(Int)->CardContent) {
@@ -18,21 +18,50 @@ struct MemoryGame<CardContent> {
             cards.append(Card(content: content, id: 2*pairIndex + 1))
         }
     }
+ 
+// 游戏规则
+// 启动时所有卡片都是反面
+// 点开第一个卡片时，翻开卡片
+// 点开第二哥卡片时，和第一个卡片进行对比
+// 点开第三张卡片时，合上其他卡片
     
-   mutating func choose(card:Card) {
-        print("card choosen:\(card)")
-        if let index = self.index(of: card) {
-            cards[index].isFaceUp = !cards[index].isFaceUp
+    var indexOfTheOneAndOnlyFaceupCard:Int? {
+        get {
+//            var faceupCardIndices = [Int]()
+//            for index in cards.indices {
+//                if cards[index].isFaceUp {
+//                    faceupCardIndices.append(index)
+//                }
+//            }
+            cards.indices.filter{cards[$0].isFaceUp}.only
+        }
+        set {
+            for index in cards.indices {
+                cards[index].isFaceUp = index == newValue
+            }
         }
     }
     
-    func index(of card:Card) -> Int? {
-        for index in 0..<cards.count {
-            if card.id == cards[index].id {
-                return index
+   mutating func choose(card:Card) {
+        print("card choosen:\(card)")
+    if let choosenIndex = cards.firstIndex(matching: card), !cards[choosenIndex].isFaceUp, !cards[choosenIndex].isMactched {
+        if let potentialMactchIndex = indexOfTheOneAndOnlyFaceupCard {
+            if cards[choosenIndex].content == cards[potentialMactchIndex].content {
+                // matched
+                cards[choosenIndex].isMactched = true
+                cards[potentialMactchIndex].isMactched = true
             }
+//            indexOfTheOneAndOnlyFaceupCard = nil
+            cards[choosenIndex].isFaceUp = true
+        }else {
+//            for index in cards.indices {
+//                cards[index].isFaceUp = false
+////                cards[index].isMactched = false
+//            }
+            indexOfTheOneAndOnlyFaceupCard = choosenIndex
         }
-        return nil
+            
+        }
     }
     
     struct Card:Identifiable {
