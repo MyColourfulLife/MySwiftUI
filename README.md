@@ -525,3 +525,176 @@ ZStack {
 
 ![今日效果图](./images/dayfour.gif)
 
+---
+
+第五天：画饼状图+使所有内容卡片化
+
+在此之前先修改一下属性的访问限制。属性的访问限制是根据项目如何使用数据确定的。
+
+private 是私有的，外界访问不到，因此既不能读也不能写。
+
+private(set),写方法是私有的，外界只能读取而不能写入。
+
+我们根据需要修改了代码中的访问限制。
+
+然后我们要说一下 **@ViewBuilder**
+
+> 顾名思义视图构造器。用于支持"list-oriented syntax" 。简单理解就是，可以像列list一样列多个视图，
+>
+> view Builder会合并这些视图成一个tupleView，或者也可以是一个条件内容视图，也可能是一个空视图。上面的情况都有可能。
+>
+> 可以使用ifesle语句，但是不能定义变量。
+
+
+
+1. 任何函数或者可读的计算属性都可以被标记为@ViewBuilder，如果这样标记了，函数或变量的内容将会被理解为一列视图（a list of views）
+
+比如说
+
+```swift
+    @ViewBuilder
+    private func front(of card:Card) -> some View {
+						RoundedRectangle(cornerRadius: conerRadius).fill(Color.white)
+            RoundedRectangle(cornerRadius: conerRadius).stroke(lineWidth: edgeLineWidth)
+						Text(card.conent)
+    }
+```
+
+标记之后，这些视图是包含在列表中的，且可以使用ifelse语句。
+
+上面会返回一个`TupleView<RoundedRectangle,RoundedRectangle,Text>`
+
+2. 你也可以使用 @ViewBuilder 来标记返回View的参数。
+
+比如我们知道的 GeometryReader 允许你使用@ViewBuilder语法。我们可以这么近似的理解GeometryReader在SwiftUI中是如何声明的
+
+```swift
+struct GeometryReader<Content> where Content:View {
+  init(@ViewBuilder content:@esacping (GeometryProxy)->Content){...}
+}
+```
+
+content参数仅仅是一个返回View的函数，现在所有使用GeometryReader的用户都可以使用列表语法来表示views。
+
+
+
+> ZStack、HStack、VStack、ForEach、Group 所有这些都在做同样的事情。
+
+我们本可以在我们自己写的Grid视图中这么做，但我们不知道如何解析这些Views，目前来说对SwiftUI是私有实现。
+
+对于@ViewBuilder，我们最重要的就是要知道，其内容是一组视图（a list of views）。你可以使用ifelse语句但不能声明变量。
+
+
+
+然后我们要说一下 **Shape**
+
+shape 是继承自 View的协议。换句话说 所有的 shape 都是 view。
+
+SwiftUI中有很多例子，比如 Rounded Rectangle，Circle， Capsule 等等。默认的，形状通过填充当前的前景色来绘制自己。我们可以更改这一行为。比如使用 .stroke() 和 .fill()这些函数用特定的方式绘制形状返回新的view。
+
+绘制的参数很有趣，在我们的demo中，我们使用的是Color，但实际上是泛型。
+
+```swift
+func fill<S>(_ whatToFillWith:S) -> View where S:ShapeStyle
+```
+
+S可以是任何东西，只要实现了ShapeStyle协议都可以。
+
+Color，ImagePaint，Angular Gradient，LinearGradient 等都实现了Shape Style协议。
+
+如果你要创建自己的Shape呢，你需要遵循Shape协议。shape协议默认实现了View协议的body，但是你还是需要实现shape提供的一个函数:`func path(in rect:CGReact)->Path`
+
+
+
+比如我们实现一个饼的形状。放在 Emoji表情的后面。我们可以定义形状,实现返回path的函数。
+
+```swift
+struct Pie:Shape {
+    var startAngle:Angle
+    var endAngle:Angle
+    var clockwise:Bool = false
+    
+    func path(in rect: CGRect) -> Path {
+        let center:CGPoint = CGPoint(x: rect.midX, y: rect.midY)
+        let radius:CGFloat = min(rect.width, rect.height)/2
+        let startPoint = CGPoint(x: center.x + radius * cos(CGFloat(startAngle.radians))
+                                 , y: center.y + radius * sin(CGFloat(startAngle.radians)))
+        var path = Path()
+        path.move(to: center)
+        path.addLine(to: startPoint)
+        path.addArc(center: center
+                    , radius: radius
+                    , startAngle: startAngle
+                    , endAngle: endAngle
+                    , clockwise: clockwise)
+        path.addLine(to: center)
+        return path
+    }
+    
+}
+```
+
+我们实现之后的样子如图所示。
+
+<img src="./images/day5.png" alt="day5" style="zoom:50%;" />
+
+动画在移动UI上非常重要，在swift UI中做动画是比较简单的。一种方式是对形状做动画。一种方式是通过他们的ViewModifiers。
+
+什么是ViewModifier呢？我们之前使用的padding,aspectRato等等他们都调用了view的modifier方法。比如.aspectRatio(2/3)实际上是调用.modifier(AspectModifier(2/3)) ,AspectModifier可以是任何遵循了ViewModifier协议的东西。在ViewModifier中有一个函数，这个函数唯一的工作就是根据传递他的参数创建一个新的View。
+
+```swift
+protocol ViewModifier {
+  associatedtype Content // this is a protocl's version of a "don't care"
+  func body(content:Content) -> some View {
+    return some View that represents a modification of content
+  }
+}
+```
+
+当调用一个view的.modifier函数时，传递给这个函数的content就是这个view。
+
+我们可以写一个自己的ViewModifier，来实现一个功能，就是把任意的view卡片化。名字就叫Cardfiy，我们来实现ViewModifier的协议。
+
+```swift
+struct Cardfiy:ViewModifier {
+    var isFaceUp:Bool
+    func body(content: Content) -> some View {
+        ZStack {
+            if isFaceUp {
+            RoundedRectangle(cornerRadius: conerRadius).fill(Color.white)
+            RoundedRectangle(cornerRadius: conerRadius).stroke(lineWidth: edgeLineWidth)
+            content
+            }else {
+                RoundedRectangle(cornerRadius: conerRadius).fill(Color.orange)
+            }
+        }
+    }
+    
+    private   let conerRadius:CGFloat = 10
+    private   let edgeLineWidth:CGFloat = 3
+}
+```
+
+这样调用的时候需要对view调用modifier(Cardfiy(isFaceUp: isFaceUp)方法。我们向像padding那样调用呢，我们可以给view写个扩展，起名叫cardfiy即可
+
+```swift
+extension View {
+    func cardfiy(isFaceUp:Bool) -> some View {
+        self.modifier(Cardfiy(isFaceUp: isFaceUp))
+    }
+}
+```
+
+这样我们就可以调用cardfiy来实现任意view对卡片化了。比如
+
+```swift
+          ZStack {
+                Pie(startAngle: .degrees(0-90), endAngle: .degrees(0+10) ,clockwise:true)
+                    .padding(5)
+                    .opacity(0.4)
+                Text(card.content)
+            }.font(.system(size: min(size.width, size.height) * fontScaleFactor))
+//            .modifier(Cardfiy(isFaceUp:card.isFaceUp))
+          .cardfiy(isFaceUp: card.isFaceUp)
+```
+
