@@ -698,3 +698,144 @@ extension View {
           .cardfiy(isFaceUp: card.isFaceUp)
 ```
 
+---
+
+第六天：动画
+
+今天要说三个内容：Property Observers、@State、Animation
+
+1. Property Observers
+
+属性观察本质上就是看到变量发生变化时就执行一段代码。语法看起来和计算属性非常相似，但完全不相同
+
+```swift
+var isFaceUp: Bool {
+willSet {
+        if newValue {
+            startUsingBonusTime()
+        } else {
+            stopUsingBonusTime()
+		}
+	}
+}
+```
+
+在这里面，newValue 是个特殊的变量，是新值，是那个将要被设置或获取的值。还有一个`didSet`方法，里面有一个特殊变量是 oldValue,是旧值，是之前用的值。
+
+2. @State
+
+View 是 只读的。
+
+事实证明，所有的视图结构都完完全全是只读的。不管SwiftUI使用什么变量持有你的views都是let，因此除了初始化view时的变量外，使用var是没有意义的。也就是只有let或者只读的计算属性才有意义。
+
+为什么呢？
+
+有很多设计原因，比如可以可靠的处理变化高效的执行重绘，视图大多时候应该是无状态的，只需一直绘制它的model即可。他们不需要自己的状态，因此不需要设置成不是只读的。等等。
+
+那么，当view需要状态的时候呢？
+
+事实上在极少的情况下视图需要一些状态的。这样的变量总是临时的。所有的永久状态都应当属于model。
+
+比如说，你已进入“编辑模式”，并正在收集更改。 暂时显示了另一个视图以收集信息或通知用户。你希望动画开始，因此您需要设置动画的终点。
+
+你必须使用@State来标记这个临时状态，发生在@state var的变量变更会使view根据需要进行重绘。从这样意义上来说，它就像@ObservedObject
+
+当views需要state时`@State var somethingTemporary: SomeType`,实际上，这将为此在堆中腾出一些空间。
+这样做是因为View结构本身是只读的，还记得吗？并且当只读View重建时，新版本将继续指向它。 换句话说，对View的更改（通过其参数）不会转储该状态。很快，我们将了解这些@事物（例如@Published和@ObservedObject）是什么，但还不是。 现在，只知道您的View中的任何可读写var必须标有@State。
+谨慎使用它们。
+
+3. 动画
+
+什么可以动画？
+
+你只能对已经出现在屏幕上的容器中的视图的修改做动画。“Views in containers that are already on screen ”
+
+哪些修改呢？
+
+- View的出现和消失
+- 对视图的“可动画化”视图修改器的参数的更改
+- 对形状创建的参数的更改
+
+如何让动画动起来，有两种方式
+
+- 隐式动画：使用是私有view modifier 的 .animation(Animation)
+- 显示动画：将要修改的内容放在 withAnimation(Animation){}
+
+隐式动画：自动动画。所有的视图修改器(ViewModifier)参数总是动画的。这些改变是根据你指定的曲线和时间进行变化。简单的加上`.animation(Animation)`意思你要执行自动动画。
+
+```swift
+Text(“👻 ”)
+.opacity(scary ? 1 : 0)
+.rotationEffect(Angle.degrees(upsideDown ? 180 : 0)) 
+.animation(Animation.easeInOut) // Swift可以推断出动画
+```
+
+现在，不管什么时候发生变化， opacity/rotation 都会进行动画。由于对动画视图修改器的参数的更改具有动画效果，没有使用`.animation()`opacity/rotation 的变更会立刻从屏幕上显现。
+
+注意⚠️：.animation修饰符不适用于你想用在容器上的想法。 容器只是将.animation修饰符传播到它包含的所有视图里，换句话说，.animation不能像.padding那样工作，而更像.font。
+
+
+
+传递给.animation()的参数是一个 Animation 结构体。这个结构体可以让你控制动画，比如 持续时间， 延迟执行时间，重复，曲线等。
+
+动画曲线：是用来控制动画速率等，比如线性、淡入淡出、弹性等。
+
+隐式与显式动画
+这些“自动”隐式动画通常不是动画行为的主要来源。 它们通常用于“叶子”（即非容器）视图。
+或者，更一般而言，在通常独立于其他视图工作的视图上。
+回想一下，你不能为容器视图隐式设置动画（它会传播到内部的视图）。 那是因为在容器中，您开始希望能够协调View的动画。 本质上，包含在一起的一堆View希望一起进行动画处理。
+而且，它们可能都将响应某些用户操作或模型更改而一起进行动画处理。 这就是为什么要需要显示动画了。
+
+显式动画创建一个动画会话，在此期间...由于执行代码块而进行的所有合格更改将一起动画化。
+您提供要使用的动画（持续时间，曲线等）和代码块。
+
+```swift
+withAnimation(.linear(duration: 2)) {
+// do something that will cause ViewModifier/Shape arguments to change somewhere 
+}
+```
+
+显式动画几乎总是包裹在对ViewModel 意图函数里。 它们也包含在修改UI的地方比如进入编辑模式。 处理用户手势的代码不包裹在withAnimation中是很少见的。
+
+显式动画不会覆盖隐式动画。
+
+transitions过渡 
+
+过度指定视图如何出现和离开。过度只不过是一对ViewModifiers。一个modifier是对移动视图之前的修改，另一个是移动视图之后的修改。因此，过渡实际上只是“更改视图修饰符的参数”动画的一种形式。非对称过渡具有2对ViewModifier。一对用于显示视图，另一对用于消失视图。示例：视图在显示时会淡入，但在消失时会在屏幕上飞过。
+
+当view出现和离开屏幕时如何指定ViewModifiers使用呢？使用.transition()。比如使用两个内置的过渡: .scale and .identity 
+
+```swift
+ZStack {
+    if isFaceUp {
+			RoundedRectangle() // default .transition is .opacity 
+      Text(“👻 ”).transition(.scale)
+    } else {
+        RoundedRectangle(cornerRadius: 10).transition(.identity)
+} }
+```
+
+如果 isFaceUp 变更了（当ZStack在屏幕上并且正在执行显式动画） 当变为false时，背面会立即出现，文字会缩小至没有，正面会淡出。当为true时，背面会立刻消失。文字会从无放大到有。
+
+不像.animation(), .transition()不会重新分配到容器的内容视图(但是Group和ForEach确实将.transition（）分发到其内容视图)。.transition()仅指定ViewModifiers是什么。它不会导致任何动画的发生。换句话说，在这里将单词transition看作是名词，而不是动词。 您正在声明要使用的过渡，而不是导致过渡发生。
+
+过渡不适用于隐式动画，仅适用于显式动画。
+
+Shape和ViewModifier动画
+你现在可能已经注意到，所有实际的动画都发生在Shapes和ViewModifiers中。 那么他们如何参与动画呢？
+本质上，动画系统将动画持续时间分为几小段。
+Shape或ViewModifier可使动画系统知道需要分段的信息。 （例如，我们的“饼形”将要把饼的角度分成几部分。）
+动画系统然后告诉Shape / ViewModifier它应该显示的当前片段。 而且Shape / ViewModifier可以确保其代码始终能够反映出这一点。
+
+与动画系统的通信是通过两个变量（双向）进行的。 该变量是Animatable协议中的唯一内容。
+想要动画的Shape和ViewModifier必须实现此协议。
+   var animatableData：Type
+类型必须实现协议VectorArithmetic。那是因为它必须能够在动画曲线上分解成小块。类型几乎总是浮点数（Float，Double，CGFloat）。但是还有另一个实现VectorArithmetic的结构称为AnimatablePair。 AnimatablePair将两个VectorArithmetics组合为一个VectorArithmetic！
+当然，您可以拥有AnimatablePairs的AnimatablePairs，因此你可以所有你想要的动画。
+
+由于animatableData双向通信，因此它是可读写的var。该变量的设置是动画系统，它告诉Shape / VM绘制哪一块。该变量的获取是动画系统获取动画的起点/终点。通常，这是一个计算得出的变量（尽管不一定必须如此）。
+我们可能不希望在Shape / VM代码中使用名称“ animatableData”（我们想使用更能说明数据对我们而言的变量名）。 因此，获取/设置通常只是获取/设置一些其他变量
+
+
+
+
