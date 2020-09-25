@@ -836,6 +836,148 @@ Shape或ViewModifier可使动画系统知道需要分段的信息。 （例如�
 由于animatableData双向通信，因此它是可读写的var。该变量的设置是动画系统，它告诉Shape / VM绘制哪一块。该变量的获取是动画系统获取动画的起点/终点。通常，这是一个计算得出的变量（尽管不一定必须如此）。
 我们可能不希望在Shape / VM代码中使用名称“ animatableData”（我们想使用更能说明数据对我们而言的变量名）。 因此，获取/设置通常只是获取/设置一些其他变量
 
+---
+
+第七天：动画实现
+
+昨天讲了动画的理论知识，今天我们做一下动画的代码实现。先实现隐式动画
+
+当两个卡片相匹配时，我们实现了另一个卡片的内容的旋转动画。
+
+```swift
+          ZStack {
+                Pie(startAngle: .degrees(0-90), endAngle: .degrees(0+10) ,clockwise:true)
+                    .padding(5)
+                    .opacity(0.4)
+                Text(card.content)
+                .font(.system(size: min(size.width, size.height) * fontScaleFactor))
+                    .rotationEffect(Angle(degrees: card.isMactched ? 360 : 0))
+                    .animation(card.isMactched ? Animation.linear(duration: 1).repeatForever(autoreverses: false) : .default)
+            }
+```
+
+在这里我们设置了Text()内容的旋转，而且是360度一直旋转。效果如图所示
+
+![隐式动画](./images/隐式动画.gif)
+
+我们接下来要做显式动画，做显示动画之前，我们增加个功能，第一打创建游戏时，打乱卡片顺序。第二在页面底部新增新游戏的功能按钮。
+
+打乱卡片只需要打乱数据就可以了，在创建游戏的初始法方法中，调用数组的shuffle函数即可打乱数据。
+
+```swift
+    init(numberOfCards:Int,cardContentFactory:(Int)->CardContent) {
+        cards = Array<Card>()
+        for pairIndex in 0 ..< numberOfCards {
+            let content = cardContentFactory(pairIndex)
+            cards.append(Card(content: content, id: 2*pairIndex))
+            cards.append(Card(content: content, id: 2*pairIndex + 1))
+        }
+        cards.shuffle()
+    }
+```
+
+新增按钮，我们需要在View视图中增加button
+
+```swift
+    var body: some View {
+        VStack {
+            Grid(items: viewModel.cards) { card in
+                GridView(card: card).onTapGesture {
+                    viewModel.shoose(card: card)
+                }.padding(cardPadding)
+            }
+            .padding()
+            .foregroundColor(.orange)
+            
+            Button("New Game") {
+                viewModel.resetGame()
+            }
+        } 
+    }
+```
+
+这样跑起来之后，开始新游戏时并没有动画，我们想加上动画效果，我们需要在变更view model的时候，将其包裹在with Animation的闭包中。
+
+```swift
+            Button("New Game") {
+                withAnimation(.easeInOut) {
+                    viewModel.resetGame()
+                }
+            }
+```
+
+这样的话我们就有一个动画
+
+![new Game](./images/newgame.gif)
+
+我们希望点击卡片是从背面翻转到前面，而不是默认的渐变动画。我们需要做些处理。
+
+我们需要做3D旋转。我们在卡片下面写上3D旋转的动画
+
+```swift
+.rotation3DEffect(.degrees(card.isFaceUp ? 0 : 180), axis: (0,1,0))
+```
+
+![翻转1](./images/翻转1.gif)
+
+
+
+如图它的确旋转了，但并不是我们想要的效果。我们想要翻过来之后才显示内容。该怎么办呢？
+
+我们可以自己实现一个变换。这个变换是在正面和反面之间进行变换。我们可以写个ViewModifier来做这个事，我们知道动画的原理最主要的事情是 viewModifiers在处理动画。我们来对我们的卡片做处理，使他能够处理翻转动画。将我们之前写的翻转的动画移动到卡片里。而且要使得viewModifiers标记为Animatable，否则的话SwiftUI不知道如何处理动画。将ViewModifer协议变更为AnimatableModifier,就使得viewModifiers标记为了Animatable了。AnimatableModifier 其实就是 ViewModifier 和 Animatable 协议。需要实现 animatableData
+
+,animatableData就是可以动画的数据，我们这里药动画就是rotation。因此我们这样实现
+
+```swift
+    var animatableData: Double {
+        get {return rotation}
+        set {rotation = newValue}
+    }
+```
+
+到这里我们就实现了翻转的效果
+
+![翻转2](./images/翻转2.gif)
+
+然而，像之前一样，两个卡片匹配时，只有第一个卡片发生旋转动画，而后来那个没有，这是因为动画只会产生在出现的视图上，因为我们要修改一下卡片的代码，通过opacity来调节。
+
+```swift
+ZStack {
+            Group{
+                RoundedRectangle(cornerRadius: conerRadius).fill(Color.white)
+                RoundedRectangle(cornerRadius: conerRadius).stroke(lineWidth: edgeLineWidth)
+                content
+            }.opacity(isFaceUp ? 1 : 0)
+            RoundedRectangle(cornerRadius: conerRadius).fill(Color.orange)
+                .opacity(isFaceUp ? 0 : 1)
+        }.rotation3DEffect(.degrees(rotation), axis: (0,1,0))
+```
+
+处理饼状图饼状图用来表示匹配剩余时间，是个圆饼然后倒计时。所有的Shape默认都是Animatable的，我们对Shape只需要实现 animatableData即可。这里我们需要开始角度和结束角度都可以动画，我们可以使用这个类型AnimatablePair表示一组可以动画的数据类型。
+
+```swift
+    var animatableData: AnimatablePair<Double,Double> {
+        get {
+            AnimatablePair(startAngle.radians,endAngle.radians)
+        }
+        set {
+            startAngle = Angle.radians(newValue.first)
+            endAngle = Angle.radians(newValue.second)
+        }
+    }
+```
+
+必要时我们还需要临时变量来同步model,今天我们的实现的动画效果是这样的。
+
+![效果图](./images/day7.gif)
+
+
+
+
+
+
+
+
 
 
 
