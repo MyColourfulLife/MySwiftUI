@@ -971,7 +971,106 @@ ZStack {
 
 ![效果图](./images/day7.gif)
 
+---
 
+第八天：
+
+Colors VS UIColor
+
+Color
+
+使用SwiftUI声明这样一个变量会表达什么呢？
+
+它可以指定颜色，比如 .foregroundColor(Color.green)
+
+它的行为也可以像ShapeStyle，比如 .fill(Color.blue)
+
+它的行为也可以像View，比如 Color.white 可以出现在任何View可以出现的地方。
+
+由于角色多样，其API主要限于创建/比较。
+
+UIColor
+
+它用来操作颜色。
+
+它内置的颜色比Color要多，包括系统相关的颜色。可以查询并且可以转换颜色空间。比如你可以从UIColor中获取GRBA的值。一旦有了需要的UIColor，在上面的角色中使用 Color(uiColor:)。
+
+
+
+Image vs UIImage
+
+Image:不是用于保存图片的var的类型（例如jpeg或gif或类似图片），那是UIImage。在Xcode中的图片资源库中Assets.xcassets使用 Image(_ name:Sting)来访问图片。此外许多系统图片可以通过Image(systemName:)来访问。你可以控制系统图片的尺寸通过ViewModifier的 .imageScale()函数。系统图像作为遮罩（例如用于渐变）也非常有用。
+
+UIImage：是用于实际创建/处理图像并存储在vars中的类型。是图片非常强大的表示。可以处理多种文件格式，转化，动画等。一旦你有了想要的UIImage，使用Image(uiImage:)来展示它。
+
+
+
+多线程
+
+对用户来说，UI无法响应用户事件永远都是不OK的，但有时候你需要做些耗时的操作，比如访问网络，或者做一些CPU的计算分析比如机器学习。我们如果在执行这些耗时操作时保证我们的UI有响应呢，我们让这些任务放在和UI不一样的线程上去执行。
+
+在swiftUI我们更多的关心Queues而不是Threads，队列只是排队的一堆代码块，等待线程执行它们。在swift中你不必关心threads，你只需要关心队列。系统会提供和分配线程来处理这些队列。
+
+队列和闭包
+
+我们使用闭包（函数作为参数）表示在队列中等待的代码块。多线程API的核心非常简单，就是把闭包扔到队列里。下面说一下主队列和后台队列。
+
+主队列：
+
+在iOS中最重要的队列就是主队列。所有与UI相关的代码都在主队列执行。任何时候你想要对UI做些操作，一定要在这个队列中执行。在主队列之外处理UI会产生错误。系统使用单个线程来处理主队列中的所有代码块。 因此它也可以用于同步。（例如，通过仅在主队列上修改他们来保护数据结构）
+
+后台队列：
+
+还有很多可用的“后台队列”。 这些是我们执行任何耗时的非UI任务的地方。
+系统具有一堆可用于在这些后台队列上执行代码的线程。 因此，他们经常会“并行”运行（也就是同时运行）。
+它们还将与主UI队列并行运行。您可以影响这些后台队列的优先级。为此，您可以为该队列指定所需的“服务质量”。但是主队列的优先级始终比任何后台队列都要高。
+
+
+
+GCD：
+
+处理所有这些队列工作的基础API被称为GCD(Grand Central Dispatch)，它有很多方法，但有两个最基础的功能。1.获取一个队列2.将代码块放入队列。
+
+创建队列：有很多种方式，但我们只看两个。
+
+DispatchQueue.main // 所有UI代码必须放入这个队列。
+
+DispatchQueue.global(qos: QoS) // 非UI队列，有一定的服务质量。
+
+Qos是下面中的其中一种：
+
+```
+.userInteractive // 这几个中优先级最高，用户交互相关的
+.userInitiated // 用户要求
+.utility // 用户没有要求但需要做的 
+.background // 优先级最低，做一些清理工作之类的。
+```
+
+将代码块放入队列。
+
+有两种基本的方式把闭包放入队列。
+
+异步：queue.async
+
+同步：queue.sync{}
+
+同步会等待闭包中的代码执行完成才会执行后续代码。永远不要再在UI代码中使用此中方式，因为它会阻塞UI。你可能会在后台队列中调用但很少见。因此我们经常用的是异步添加。.async 将会晚会在某个时间点执行那块儿代码。它还有延迟执行的功能。
+
+主队列和非主队列经常会嵌套使用，比如耗时做一些事情之后回到主队列操作UI。
+
+```swift
+DispatchQueue(global: .userInitiated).async {
+// do something that might take a long time
+// this will not block the UI because it is happening off the main queue
+// once this long-time thing is done, it might require a change to the UI
+// but we can’t do UI here because this code is executing off the main queue
+// no problem, we just plop a closure with the UI code we want onto the main queue
+      DispatchQueue.main.async {
+// UI code can go here! we’re on the main queue! }
+}
+```
+
+在异步编程中，你会经常使用`DispatchQueue.main.async { }`这个函数，然而` DispatchQueue.global(qos:)`并没有你想象中使用的那么多。这是因为iOS中有很多异步API都在一个更高的层级上，它们会自动将他们的工作放在异步队列，比如URLSession。
 
 
 
